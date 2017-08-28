@@ -101,7 +101,7 @@ type Term interface {
 
 type TermServer struct {
 	Config  *ssh.ServerConfig
-	Handler func(tb *tb.Termbox) Term
+	Handler func(tb *tb.Termbox, sshConn *ssh.ServerConn) Term
 }
 
 func New(conf *ssh.ServerConfig) *TermServer {
@@ -116,19 +116,19 @@ func (ts *TermServer) Listen(l net.Listener) {
 		if err != nil {
 			continue
 		}
-		_, chans, reqs, err := ssh.NewServerConn(tcpConn, ts.Config)
+		sshConn, chans, reqs, err := ssh.NewServerConn(tcpConn, ts.Config)
 		if err != nil {
 			continue
 		}
 		go ssh.DiscardRequests(reqs)
-		go ts.handleChannels(chans)
+		go ts.handleChannels(chans, sshConn)
 	}
 }
 
-func (ts *TermServer) handleChannels(chans <-chan ssh.NewChannel) {
+func (ts *TermServer) handleChannels(chans <-chan ssh.NewChannel, sshconn *ssh.ServerConn) {
 	// Service the incoming Channel channel in go routine
 	for newChannel := range chans {
-		go ts.handleChannel(newChannel)
+		go ts.handleChannel(newChannel, sshconn)
 	}
 }
 
@@ -150,7 +150,7 @@ type subsystemReq struct {
 	Name string
 }
 
-func (ts *TermServer) handleChannel(newChannel ssh.NewChannel) {
+func (ts *TermServer) handleChannel(newChannel ssh.NewChannel, sshconn *ssh.ServerConn) {
 	// Since we're handling a shell, we expect a
 	// channel type of "session". The also describes
 	// "x11", "direct-tcpip" and "forwarded-tcpip"
@@ -193,7 +193,7 @@ func (ts *TermServer) handleChannel(newChannel ssh.NewChannel) {
 
 				t, _ := tb.Init(connection, connection, pty.Term, int(pty.Width), int(pty.Height))
 
-				term = ts.Handler(t)
+				term = ts.Handler(t, sshconn)
 
 				req.Reply(true, nil)
 			case "window-change":
