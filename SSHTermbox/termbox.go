@@ -201,14 +201,17 @@ func (t *Termbox) send_clear() error {
 }
 
 func (t *Termbox) Resize(newW, newH int) {
+	changed := false
 	t.sizeLock.Lock()
 	if t.newW != newW || t.newH != newH {
 		t.newW, t.newH = newW, newH
-		t.sizeLock.Unlock()
-		t.resize_comm <- Event{Type: EventResize, Width: newW, Height: newH}
-	} else {
-		t.sizeLock.Unlock()
+		changed = true
 	}
+	t.sizeLock.Unlock()
+	if changed {
+		t.resize_comm <- struct{}{}
+	}
+
 }
 
 func (t *Termbox) update_size_maybe() error {
