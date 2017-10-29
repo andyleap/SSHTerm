@@ -35,7 +35,7 @@ type Termbox struct {
 	input_comm     chan input_event
 	interrupt_comm chan struct{}
 	intbuf         []byte
-	resize_comm    chan Event
+	resize_comm    chan struct{}
 
 	newW int
 	newH int
@@ -78,7 +78,7 @@ func Init(in io.Reader, out io.Writer, term string, w, h int) (*Termbox, error) 
 		quit:           make(chan int),
 		input_comm:     make(chan input_event),
 		interrupt_comm: make(chan struct{}),
-		resize_comm:    make(chan Event, 1),
+		resize_comm:    make(chan struct{}, 1),
 		intbuf:         make([]byte, 0, 16),
 		grayscale: []Attribute{
 			0, 17, 233, 234, 235, 236, 237, 238, 239, 240, 241, 242, 243, 244,
@@ -288,8 +288,12 @@ func (t *Termbox) PollRawEvent(data []byte) Event {
 		case <-t.interrupt_comm:
 			event.Type = EventInterrupt
 			return event
-		case ev := <-t.resize_comm:
-			return ev
+		case <-t.resize_comm:
+			event.Type = EventResize
+			t.sizeLock.Lock()
+			event.Width, event.Height = t.newW, t.newH
+			t.sizeLock.Unlock()
+			return event
 		}
 	}
 }
@@ -330,8 +334,12 @@ func (t *Termbox) PollEvent() Event {
 			event.Type = EventInterrupt
 			return event
 
-		case ev := <-t.resize_comm:
-			return ev
+		case <-t.resize_comm:
+			event.Type = EventResize
+			t.sizeLock.Lock()
+			event.Width, event.Height = t.newW, t.newH
+			t.sizeLock.Unlock()
+			return event
 		}
 	}
 	panic("unreachable")
