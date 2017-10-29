@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"log"
+	"sync"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -38,6 +39,7 @@ type Termbox struct {
 
 	newW int
 	newH int
+	sizeLock sync.Mutex
 
 	// grayscale indexes
 	grayscale []Attribute
@@ -287,7 +289,6 @@ func (t *Termbox) PollRawEvent(data []byte) Event {
 			event.Type = EventInterrupt
 			return event
 		case ev := <-t.resize_comm:
-			t.update_size_maybe()
 			return ev
 		}
 	}
@@ -330,7 +331,6 @@ func (t *Termbox) PollEvent() Event {
 			return event
 
 		case ev := <-t.resize_comm:
-			t.update_size_maybe()
 			return ev
 		}
 	}

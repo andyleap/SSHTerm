@@ -201,14 +201,20 @@ func (t *Termbox) send_clear() error {
 }
 
 func (t *Termbox) Resize(newW, newH int) {
+	t.sizeLock.Lock()
 	if t.newW != newW || t.newH != newH {
 		t.newW, t.newH = newW, newH
+		t.sizeLock.Unlock()
 		t.resize_comm <- Event{Type: EventResize, Width: newW, Height: newH}
+	} else {
+		t.sizeLock.Unlock()
 	}
 }
 
 func (t *Termbox) update_size_maybe() error {
+	t.sizeLock.Lock()
 	w, h := t.newW, t.newH
+	t.sizeLock.Unlock()
 	if w != t.termw || h != t.termh {
 		t.termw, t.termh = w, h
 		t.back_buffer.resize(w, h, t.foreground, t.background)
