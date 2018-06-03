@@ -37,8 +37,8 @@ type Termbox struct {
 	intbuf         []byte
 	resize_comm    chan struct{}
 
-	newW int
-	newH int
+	newW     int
+	newH     int
 	sizeLock sync.Mutex
 
 	// grayscale indexes
