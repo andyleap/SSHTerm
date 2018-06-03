@@ -6,8 +6,12 @@ import (
 	"log"
 	"sync"
 
+	"context"
+	"errors"
 	"github.com/mattn/go-runewidth"
 )
+
+var errorUnknownTerm = errors.New("termbox: Matching term not found")
 
 type Termbox struct {
 	keys  []string
@@ -37,8 +41,8 @@ type Termbox struct {
 	intbuf         []byte
 	resize_comm    chan struct{}
 
-	newW int
-	newH int
+	newW     int
+	newH     int
 	sizeLock sync.Mutex
 
 	// grayscale indexes
@@ -86,7 +90,11 @@ func Init(in io.Reader, out io.Writer, term string, w, h int) (*Termbox, error) 
 		},
 	}
 
-	termbox.keys, termbox.funcs, _ = getTermInfo(term)
+	var err error
+	termbox.keys, termbox.funcs, err = getTermInfo(term)
+	if err != nil {
+		return nil, err
+	}
 
 	termbox.writeString(termbox.funcs[t_enter_ca])
 	termbox.writeString(termbox.funcs[t_enter_keypad])
@@ -339,6 +347,55 @@ func (t *Termbox) PollEvent() Event {
 			t.sizeLock.Lock()
 			event.Width, event.Height = t.newW, t.newH
 			t.sizeLock.Unlock()
+			return event
+		}
+	}
+	panic("unreachable")
+}
+
+func (t *Termbox) PollEventWithContext(ctx context.Context) Event {
+	var event Event
+
+	// try to extract event from input buffer, return on success
+	event.Type = EventKey
+	ok := t.extract_event(t.inbuf, &event)
+	if event.N != 0 {
+		copy(t.inbuf, t.inbuf[event.N:])
+		t.inbuf = t.inbuf[:len(t.inbuf)-event.N]
+	}
+	if ok {
+		return event
+	}
+
+	for {
+		select {
+		case ev := <-t.input_comm:
+			if ev.err != nil {
+				return Event{Type: EventError, Err: ev.err}
+			}
+
+			t.inbuf = append(t.inbuf, ev.data...)
+			t.input_comm <- ev
+			ok := t.extract_event(t.inbuf, &event)
+			if event.N != 0 {
+				copy(t.inbuf, t.inbuf[event.N:])
+				t.inbuf = t.inbuf[:len(t.inbuf)-event.N]
+			}
+			if ok {
+				return event
+			}
+		case <-t.interrupt_comm:
+			event.Type = EventInterrupt
+			return event
+
+		case <-t.resize_comm:
+			event.Type = EventResize
+			t.sizeLock.Lock()
+			event.Width, event.Height = t.newW, t.newH
+			t.sizeLock.Unlock()
+			return event
+		case <-ctx.Done():
+			event.Type = EventCancel
 			return event
 		}
 	}

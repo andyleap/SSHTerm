@@ -1,7 +1,6 @@
 package sshtermbox
 
 import (
-	"errors"
 	"strings"
 )
 
@@ -41,5 +40,5 @@ func getTermInfo(term string) ([]string, []string, error) {
 		}
 	}
 
-	return nil, nil, errors.New("termbox: Matching term not found")
+	return nil, nil, errorUnknownTerm
 }

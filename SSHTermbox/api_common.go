@@ -179,4 +179,5 @@ const (
 	EventInterrupt
 	EventRaw
 	EventNone
+	EventCancel
 )
